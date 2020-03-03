@@ -1,0 +1,3 @@
+# Shortest paths
+
+Experiments with routing algorithms on OpenStreetMap data.
