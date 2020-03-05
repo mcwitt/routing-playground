@@ -45,10 +45,14 @@ let
   pythonEnv = python3.withPackages (ps: [ planetutils ]);
 
   download-osm = writeShellScriptBin "download-osm" ''
+    mkdir -p data
+    extract_id=san-francisco-bay_california
+    data_format=geojson
     osm_extract_download \
       --api-token=$1 \
-      --data-format=pbf \
-      san-francisco-bay_california
+      --data-format=$data_format \
+      --outpath="data/$extract_id.$data_format" \
+    "$extract_id"
   '';
 
 in mkShell {
