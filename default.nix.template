@@ -1,4 +1,0 @@
-{ pkgs ? import <nixpkgs> { } }:
-pkgs.callPackage ./osm.nix {
-  token = "my_api_token;
-}

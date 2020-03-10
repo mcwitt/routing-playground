@@ -1,8 +1,8 @@
-{ pkgs, token }:
+{ pkgs }:
 with pkgs;
 let
-  osmosis = callPackage ./osmosis { };
-
+  osmosis = callPackage ../osmosis { };
+  token = import ./token.nix;
   extractId = "san-francisco-bay_california";
 
   osmExtract = let
