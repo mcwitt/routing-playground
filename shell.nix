@@ -1,8 +1,8 @@
 { pkgs ? import <nixpkgs> { }, ... }:
 let
   inherit (pkgs) stdenv callPackage;
-  osmData = pkgs.callPackage ./osm-data { };
-  osmosis = pkgs.callPackage ./osmosis { };
+  osmData = callPackage ./osm-data { };
+  osmosis = callPackage ./osmosis { };
 in stdenv.mkDerivation {
   name = "shortest-paths-devenv";
   buildInputs = with pkgs; [
@@ -33,10 +33,7 @@ in stdenv.mkDerivation {
       createdb pgsnapshot
       psql -d pgsnapshot -c 'CREATE EXTENSION postgis; CREATE EXTENSION hstore;'
       psql -d pgsnapshot -f ${osmosis}/script/pgsnapshot_schema_0.6.sql
-      ${osmosis}/bin/osmosis \
-        --read-pbf ${osmData}/sf.osm.pbf \
-        --log-progress \
-        --write-pgsql database=pgsnapshot
+      ${osmosis}/bin/osmosis --read-pbf ${osmData}/sf.osm.pbf --log-progress --write-pgsql database=pgsnapshot
     fi
   '';
 }
