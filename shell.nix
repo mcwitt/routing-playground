@@ -34,6 +34,8 @@ in stdenv.mkDerivation {
       psql -d pgsnapshot -c 'CREATE EXTENSION postgis; CREATE EXTENSION hstore;'
       psql -d pgsnapshot -f ${osmosis}/script/pgsnapshot_schema_0.6.sql
       ${osmosis}/bin/osmosis --read-pbf ${osmData}/sf.osm.pbf --log-progress --write-pgsql database=pgsnapshot
+      echo 'Precomputing edge weights...'
+      psql -d pgsnapshot -f ${./precompute-sparse.sql}
     fi
   '';
 }
