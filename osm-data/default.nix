@@ -12,7 +12,7 @@ let
     name = "osm-extract--${extractId}";
     url =
       "https://${host}/${endpoint}?data_format=pbf&string_id=${extractId}&api_token=${token}";
-    sha256 = "0ra8d51dnmpxqf7b469pwyncnbjlx0174ra1l9ghvr5m05nyrv59";
+    sha256 = "1ghzwplsd4drn86m8b52b3aidmxq7n08qrl9ipbzmp3ywnlidrml";
   };
 
 in runCommand "osm-data-sf" {

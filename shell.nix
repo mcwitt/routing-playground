@@ -1,16 +1,13 @@
 { pkgs ? import <nixpkgs> { }, ... }:
 let
   inherit (pkgs) stdenv callPackage;
-  osmData = callPackage ./osm-data { };
+  osm-data = callPackage ./osm-data { };
   osmosis = callPackage ./osmosis { };
-in stdenv.mkDerivation {
-  name = "shortest-paths-devenv";
-  buildInputs = with pkgs; [
-    osmData
-    osmosis
-    adoptopenjdk-bin
-    (postgresql.withPackages (ps: [ ps.postgis ]))
-  ];
+  pg = pkgs.postgresql.withPackages (ps: [ ps.postgis ]);
+  database = "pgsnapshot";
+
+in pkgs.mkShell {
+  buildInputs = with pkgs; [ adoptopenjdk-bin osm-data osmosis pg ];
   shellHook = ''
     export PGDATA=$PWD/postgres_data
     export PGHOST=$PWD/postgres
@@ -23,19 +20,21 @@ in stdenv.mkDerivation {
     fi
     if [ ! -d $PGDATA ]; then
       echo 'Initializing postgresql database...'
-      initdb $PGDATA --auth=trust > /dev/null
+      ${pg}/bin/initdb $PGDATA --auth=trust > /dev/null
     fi
 
-    pg_ctl start -l $LOG_PATH -o "-c listen_addresses=localhost -c unix_socket_directories=$PGHOST"
+    ${pg}/bin/pg_ctl start -l $LOG_PATH -o "-c listen_addresses=localhost -c unix_socket_directories=$PGHOST"
+    trap "${pg}/bin/pg_ctl stop" EXIT
 
-    if ! psql -lqt | cut -d \| -f 1 | grep -qw pgsnapshot; then
+    if ! ${pg}/bin/psql -lqt | cut -d \| -f 1 | grep -qw ${database}; then
       echo 'First run, setting up postgis, OSM schema...'
-      createdb pgsnapshot
-      psql -d pgsnapshot -c 'CREATE EXTENSION postgis; CREATE EXTENSION hstore;'
-      psql -d pgsnapshot -f ${osmosis}/script/pgsnapshot_schema_0.6.sql
-      ${osmosis}/bin/osmosis --read-pbf ${osmData}/sf.osm.pbf --log-progress --write-pgsql database=pgsnapshot
+      ${pg}/bin/createdb ${database}
+      ${pg}/bin/psql -d ${database} -c 'CREATE EXTENSION postgis; CREATE EXTENSION hstore;'
+      ${pg}/bin/psql -d ${database} -f ${osmosis}/script/pgsnapshot_schema_0.6.sql
+      ${osmosis}/bin/osmosis --read-pbf ${osm-data}/sf.osm.pbf --log-progress --write-pgsql database=${database}
+
       echo 'Precomputing edge weights...'
-      psql -d pgsnapshot -f ${./precompute-sparse.sql}
+      ${pg}/bin/psql -d ${database} -f ${./precompute-sparse.sql}
     fi
   '';
 }
