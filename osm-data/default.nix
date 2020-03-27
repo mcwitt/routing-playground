@@ -2,26 +2,23 @@
 with pkgs;
 let
   osmosis = callPackage ../osmosis { };
-  token = import ./token.nix;
-  extractId = "san-francisco-bay_california";
 
-  osmExtract = let
-    host = "app.interline.io";
-    endpoint = "osm_extracts/download_latest";
-  in fetchurl {
-    name = "osm-extract--${extractId}";
-    url =
-      "https://${host}/${endpoint}?data_format=pbf&string_id=${extractId}&api_token=${token}";
-    sha256 = "1ghzwplsd4drn86m8b52b3aidmxq7n08qrl9ipbzmp3ywnlidrml";
+  bbox = {
+    s = "37.694";
+    w = "-122.525";
+    n = "37.815";
+    e = "-122.35";
   };
 
-in runCommand "osm-data-sf" {
-  buildInputs = [ osmosis adoptopenjdk-jre-bin ];
-} ''
+  osm-xml = fetchurl {
+    name = "osm-xml";
+    url = let endpoint = "https://lz4.overpass-api.de/api/interpreter";
+    in "${endpoint}?data=%28node%28${bbox.s}%2C${bbox.w}%2C${bbox.n}%2C${bbox.e}%29%3B%3C%3B%29%3Bout%20meta%3B";
+    sha256 = "17062w6vyfjsgjaq2idahdw88z91nn9n0j6k6bfqvy2kb5a3f36z";
+  };
+
+in runCommand "osm-data" { buildInputs = [ osmosis adoptopenjdk-jre-bin ]; } ''
   mkdir -p $out
-  cp ${osmExtract} $out
-  osmosis \
-    --read-pbf ${osmExtract} \
-    --bounding-box top=37.815 left=-122.525 bottom=37.694 right=-122.350 \
-    --write-pbf $out/sf.osm.pbf
+  cp ${osm-xml} $out
+  osmosis --read-xml ${osm-xml} --write-pbf $out/sf.osm.pbf
 ''
