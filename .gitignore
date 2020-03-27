@@ -1,8 +1,2 @@
-/postgres
-/postgres_data
-/osm-data/token.nix
-
 .stack-work/
 *~
-
-jupyterlab/*

@@ -1,3 +1,3 @@
-# Changelog for shortest-paths
+# Changelog for routing-playground
 
 ## Unreleased changes

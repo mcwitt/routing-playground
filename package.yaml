@@ -1,6 +1,6 @@
-name:                shortest-paths
+name:                routing-playground
 version:             0.1.0.0
-github:              "githubuser/shortest-paths"
+github:              "mcwitt/routing-playground"
 license:             BSD3
 author:              "Author name here"
 maintainer:          "example@example.com"
@@ -17,16 +17,28 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/shortest-paths#readme>
+description:         Please see the README on GitHub at <https://github.com/mcwitt/routing-playground#readme>
 
 dependencies:
 - base >= 4.7 && < 5
+- postgresql-simple
+- containers
+- heaps
+- mtl
 
 library:
   source-dirs: src
+  ghc-options:
+  - -fwarn-tabs
+  - -fwarn-unused-imports
+  - -fwarn-name-shadowing
+  - -fwarn-incomplete-uni-patterns
+  - -fwarn-incomplete-patterns
+  - -fwarn-overlapping-patterns
+  - -fwarn-incomplete-record-updates
 
 executables:
-  shortest-paths-exe:
+  routing-playground-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -34,10 +46,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - shortest-paths
+    - routing-playground
 
 tests:
-  shortest-paths-test:
+  routing-playground-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -45,4 +57,5 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - shortest-paths
+    - routing-playground
+    - hspec

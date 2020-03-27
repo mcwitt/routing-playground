@@ -1,13 +1,42 @@
 { pkgs ? import <nixpkgs> { }, ... }:
 let
   inherit (pkgs) stdenv callPackage;
-  osm-data = callPackage ./osm-data { };
+  data = callPackage ./data { };
   osmosis = callPackage ./osmosis { };
   pg = pkgs.postgresql.withPackages (ps: [ ps.postgis ]);
   database = "pgsnapshot";
 
-in pkgs.mkShell {
-  buildInputs = with pkgs; [ adoptopenjdk-bin osm-data osmosis pg ];
+  jupyter = import (builtins.fetchGit {
+    url = "https://github.com/tweag/jupyterWith";
+    rev = "7a6716f0c0a5538691a2f71a9f12b066bce7d55c";
+  }) {
+    # ihaskell-hvega is marked broken in the version of nixpkgs
+    # imported by jupyterWith but appears to be working
+    config.allowBroken = true;
+  };
+
+  ihaskell = jupyter.kernels.iHaskellWith {
+    name = "haskell";
+    packages = ps:
+      with ps; [
+        formatting
+        hvega
+        ihaskell-hvega
+        mtl
+        postgresql-simple
+        (ps.callPackage ../. { })
+      ];
+  };
+
+  jupyterlab = jupyter.jupyterlabWith {
+    kernels = [ ihaskell ];
+    directory = "jupyterlab";
+  };
+
+in jupyterlab.env.overrideAttrs (oldAttrs: {
+  buildInputs = with pkgs;
+    [ adoptopenjdk-bin data osmosis pg ] ++ oldAttrs.buildInputs;
+
   shellHook = ''
     export PGDATA=$PWD/postgres_data
     export PGHOST=$PWD/postgres
@@ -31,10 +60,10 @@ in pkgs.mkShell {
       ${pg}/bin/createdb ${database}
       ${pg}/bin/psql -d ${database} -c 'CREATE EXTENSION postgis; CREATE EXTENSION hstore;'
       ${pg}/bin/psql -d ${database} -f ${osmosis}/script/pgsnapshot_schema_0.6.sql
-      ${osmosis}/bin/osmosis --read-pbf ${osm-data}/sf.osm.pbf --log-progress --write-pgsql database=${database}
+      ${osmosis}/bin/osmosis --read-pbf ${data}/sf.osm.pbf --log-progress --write-pgsql database=${database}
 
       echo 'Precomputing edge weights...'
       ${pg}/bin/psql -d ${database} -f ${./precompute-sparse.sql}
     fi
-  '';
-}
+  '' + oldAttrs.shellHook;
+})

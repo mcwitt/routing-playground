@@ -35,7 +35,7 @@ FROM (
     JOIN nodes ON nodes.id = waypoints.node_id
   )
   SELECT b.waypoint_id
-       , SUM(ST_Distance(a.geom, b.geom))
+       , SUM(ST_Distance(a.geom :: geography, b.geom :: geography))
          OVER(PARTITION BY a.way_id ORDER BY a.sequence_id) AS distance
   FROM wp_geom a
   JOIN wp_geom b ON a.way_id = b.way_id AND a.sequence_id + 1 = b.sequence_id
