@@ -7,14 +7,17 @@ module Routing.Lib
   , makeGraph
   , unDGraph
   , dijkstra
+  , spDijkstra
   )
 where
 
+import           Data.Heap                      ( Heap )
 import qualified Data.Heap                     as Heap
 import           Data.IntMap                    ( IntMap )
 import qualified Data.IntMap                   as IntMap
-import qualified Data.List.NonEmpty            as N
+import           Data.List                      ( find )
 import           Data.Maybe                     ( fromMaybe )
+import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
 
 type Node = Int
@@ -43,17 +46,9 @@ makeGraph =
         IntMap.empty
 
 dijkstra
-  :: Graph g
-  => Node     -- ^ Origin node
-  -> Node     -- ^ Destination node
-  -> g
-  -> Maybe (Double, [Node])
-dijkstra origin dest gr = fmap N.head . N.nonEmpty $ filter (endsAt dest)
-                                                            shortestPaths
+  :: Graph g => g -> Heap (Double, [Node]) -> Set Node -> [(Double, [Node])]
+dijkstra gr = go
  where
-  endsAt n (_, x : _) = x == n
-  endsAt _ _          = False
-  shortestPaths = go (Heap.singleton (0, [origin])) Set.empty
   go heap visited = case Heap.uncons heap of
     Just (h@(wsum, x : xs), hs) ->
       let unvisited (x', _) = x `Set.notMember` visited
@@ -62,12 +57,21 @@ dijkstra origin dest gr = fmap N.head . N.nonEmpty $ filter (endsAt dest)
       in  h : go (foldr Heap.insert hs additions) (Set.insert x visited)
     _ -> []
 
+spDijkstra :: Graph g => Node -> Node -> g -> Maybe (Double, [Node])
+spDijkstra o d gr =
+  find
+      (\(_, xs) -> case xs of
+        x : _ -> x == d
+        _     -> False
+      )
+    $ dijkstra gr (Heap.singleton (0, [o])) Set.empty
+
 astar
   :: Graph g
-  => (Node -> Node -> Double)  -- ^ Function implementing heuristic:
+  => g
+  -> (Node -> Node -> Double)  -- ^ Function implementing heuristic:
                                --   destination -> node -> H_dest(node)
-  -> Node                      -- ^ Origin node
-  -> Node                      -- ^ Destination node
-  -> g
-  -> (Double, [Node])          -- ^ Shortest path, total distance
+  -> Heap (Double, [Node])
+  -> Set Node
+  -> (Double, [Node])
 astar origin dest gr = undefined
