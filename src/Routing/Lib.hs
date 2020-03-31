@@ -2,33 +2,43 @@
 
 module Routing.Lib
   ( Node
-  , DGraph(DGraph)
+  , AList(AList)
   , Edge(Edge)
-  , makeGraph
-  , unDGraph
-  , dijkstra
+  , makeDGraph
+  , unAList
+  , generateDijkstra
   , spDijkstra
   )
 where
 
+import           Control.Monad.Loops
+import           Control.Monad.State
+import           Data.Bifunctor
+import           Data.Function                  ( (&) )
 import           Data.Heap                      ( Heap )
 import qualified Data.Heap                     as Heap
 import           Data.IntMap                    ( IntMap )
 import qualified Data.IntMap                   as IntMap
-import           Data.List                      ( find )
+import           Data.List                      ( find
+                                                , unfoldr
+                                                )
+import qualified Data.List.NonEmpty            as N
+import           Data.List.NonEmpty             ( NonEmpty((:|))
+                                                , (<|)
+                                                )
 import           Data.Maybe                     ( fromMaybe )
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
 
 type Node = Int
 
-class Graph a where
-  neighbors :: Node -> a -> [(Node, Double)]
+class DGraph a where
+  neighbors :: Node -> a -> [(Double, Node)]
 
-newtype DGraph = DGraph { unDGraph :: IntMap [(Node, Double)] }
+newtype AList = AList { unAList :: IntMap [(Double, Node)] }
 
-instance Graph DGraph where
-  neighbors n = fromMaybe [] . IntMap.lookup n . unDGraph
+instance DGraph AList where
+  neighbors n = fromMaybe [] . IntMap.lookup n . unAList
 
 data Edge a = Edge { from   :: Node
                    , to     :: Node
@@ -36,42 +46,104 @@ data Edge a = Edge { from   :: Node
                    , label  :: a
                    } deriving Show
 
-makeGraph :: [Edge a] -> DGraph
-makeGraph =
-  DGraph
+makeDGraph :: [Edge a] -> AList
+makeDGraph =
+  AList
     . foldr
         (\Edge { from, to, weight } z ->
-          IntMap.insertWith (++) from [(to, weight)] z
+          IntMap.insertWith (++) from [(weight, to)] z
         )
         IntMap.empty
 
-dijkstra
-  :: Graph g => g -> Heap (Double, [Node]) -> Set Node -> [(Double, [Node])]
-dijkstra gr = go
+type Path = (Double, NonEmpty Node)
+
+dijkstraSimple
+  :: DGraph g
+  => g          -- ^ directed graph
+  -> Heap Path  -- ^ initial pairs
+  -> Set Node   -- ^ nodes visited so far
+  -> [Path]     -- ^ Dijkstra search tree
+dijkstraSimple gr = go
  where
   go heap visited = case Heap.uncons heap of
-    Just (h@(wsum, x : xs), hs) ->
-      let unvisited (x', _) = x `Set.notMember` visited
-          additions = (\(x', w) -> (wsum + w, x' : x : xs))
-            <$> filter unvisited (neighbors x gr)
-      in  h : go (foldr Heap.insert hs additions) (Set.insert x visited)
-    _ -> []
+    Just (h@(dist, xs@(xh :| _)), hs) -> if xh `Set.notMember` visited
+      then
+        let newPaths = [ (dist + d, x <| xs) | (d, x) <- neighbors xh gr ]
+            hs'      = foldr Heap.insert hs newPaths
+            visited' = Set.insert xh visited
+        in  h : go hs' visited'
+      else go hs visited
+    Nothing -> []
 
-spDijkstra :: Graph g => Node -> Node -> g -> Maybe (Double, [Node])
+-- | Iteration of Dijkstra's algorithm
+dijkstra :: DGraph g => g -> State (Heap Path, Set Node) (Maybe Path)
+dijkstra gr = get >>= \(heap, visited) -> case Heap.uncons heap of
+
+  Just (h@(dist, xs@(xh :| _)), hs) ->
+    let newPaths =
+            [ (dist + d, x <| xs)
+            | (d, x) <- neighbors xh gr
+            , x `Set.notMember` visited
+            ]
+
+        hs' =
+            hs
+              -- remove all instances of this node from the heap
+              & Heap.filter (\(_, x :| _) -> x /= xh)
+              -- add paths to (unvisited) neighbors to the heap
+              & flip (foldr Heap.insert) newPaths
+
+        visited' = Set.insert xh visited
+    in  put (hs', visited') >> return (Just h)
+
+  _ -> return Nothing
+
+generateDijkstra
+  :: DGraph g
+  => g          -- ^ directed graph
+  -> Heap Path  -- ^ initial pairs
+  -> Set Node   -- ^ nodes visited so far
+  -> [Path]     -- ^ search tree
+generateDijkstra = curry . evalState . unfoldM . dijkstra
+
+generateDijkstra'
+  :: DGraph g
+  => g          -- ^ directed graph
+  -> Heap Path  -- ^ initial pairs
+  -> Set Node   -- ^ nodes visited so far
+  -> [(Path, (Heap Path, Set Node))]
+generateDijkstra' gr =
+  curry . unfoldr $ (\t@(mp, s) -> fmap (\p -> ((p, s), s)) mp) . runState
+    (dijkstra gr)
+
+-- | Shortest path between a pair of nodes, using Dijkstra's algorithm
+spDijkstra
+  :: DGraph g
+  => Node                    -- ^ origin node
+  -> Node                    -- ^ destination node
+  -> g                       -- ^ directed graph
+  -> Maybe (Double, [Node])  -- ^ shortest path from origin to destination, if one exists
 spDijkstra o d gr =
-  find
-      (\(_, xs) -> case xs of
-        x : _ -> x == d
-        _     -> False
-      )
-    $ dijkstra gr (Heap.singleton (0, [o])) Set.empty
+  fmap (second N.toList) $ find (\(_, (x :| _)) -> x == d) $ generateDijkstra
+    gr
+    (Heap.singleton (0, o :| []))
+    Set.empty
 
+-- | Shortest path between a pair of nodes, using the bidirectional Dijkstra algorithm
+spBDD
+  :: DGraph g
+  => Node                    -- ^ origin node
+  -> Node                    -- ^ destination node
+  -> g                       -- ^ directed graph
+  -> Maybe (Double, [Node])  -- ^ shortest path from origin to destination, if one exists
+spBDD = undefined
+
+-- | Shortest path between a pair of nodes, using the bidirectional Dijkstra algorithm
 astar
-  :: Graph g
-  => g
-  -> (Node -> Node -> Double)  -- ^ Function implementing heuristic:
-                               --   destination -> node -> H_dest(node)
-  -> Heap (Double, [Node])
-  -> Set Node
-  -> (Double, [Node])
+  :: DGraph g
+  => g                         -- ^ directed graph
+  -> (Node -> Node -> Double)  -- ^ function implementing admissible heuristic
+  -> Heap Path                 -- ^ initial pairs
+  -> Set Node                  -- ^ nodes visited so far
+  -> [Path]
 astar origin dest gr = undefined

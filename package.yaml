@@ -25,6 +25,7 @@ dependencies:
 - containers
 - heaps
 - mtl
+- monad-loops
 
 library:
   source-dirs: src
