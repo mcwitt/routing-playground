@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> { }, ... }:
 let
   inherit (pkgs) stdenv callPackage;
-  data = callPackage ./data { };
+  osm-xml = callPackage ./osm-xml.nix { };
   osmosis = callPackage ./osmosis { };
   pg = pkgs.postgresql.withPackages (ps: [ ps.postgis ]);
   database = "pgsnapshot";
@@ -35,7 +35,7 @@ let
 
 in jupyterlab.env.overrideAttrs (oldAttrs: {
   buildInputs = with pkgs;
-    [ adoptopenjdk-bin data osmosis pg ] ++ oldAttrs.buildInputs;
+    [ adoptopenjdk-bin osmosis pg ] ++ oldAttrs.buildInputs;
 
   shellHook = ''
     export PGDATA=$PWD/postgres_data
@@ -60,7 +60,7 @@ in jupyterlab.env.overrideAttrs (oldAttrs: {
       ${pg}/bin/createdb ${database}
       ${pg}/bin/psql -d ${database} -c 'CREATE EXTENSION postgis; CREATE EXTENSION hstore;'
       ${pg}/bin/psql -d ${database} -f ${osmosis}/script/pgsnapshot_schema_0.6.sql
-      ${osmosis}/bin/osmosis --read-pbf ${data}/sf.osm.pbf --log-progress --write-pgsql database=${database}
+      ${osmosis}/bin/osmosis --read-xml ${osm-xml} --log-progress --write-pgsql database=${database}
 
       echo 'Precomputing edge weights...'
       ${pg}/bin/psql -d ${database} -f ${./precompute-sparse.sql}
