@@ -1,13 +1,15 @@
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Routing.Lib
   ( Node
   , AList(AList)
   , Edge(Edge)
-  , makeDGraph
+  , fromEdges
+  , fromEdgesSymmetric
   , unAList
   , generateDijkstra
   , spDijkstra
+  , spDijkstraSimple
   )
 where
 
@@ -20,6 +22,7 @@ import qualified Data.Heap                     as Heap
 import           Data.IntMap                    ( IntMap )
 import qualified Data.IntMap                   as IntMap
 import           Data.List                      ( find
+                                                , nub
                                                 , unfoldr
                                                 )
 import qualified Data.List.NonEmpty            as N
@@ -32,37 +35,57 @@ import qualified Data.Set                      as Set
 
 type Node = Int
 
+-- | Interface for directed graphs.
 class DGraph a where
   neighbors :: Node -> a -> [(Double, Node)]
 
+-- | Adjacency list for representing a directed graph.
 newtype AList = AList { unAList :: IntMap [(Double, Node)] }
 
+-- | Adjacency list representation.
 instance DGraph AList where
   neighbors n = fromMaybe [] . IntMap.lookup n . unAList
 
+instance Semigroup AList where
+  AList l <> AList r =
+    AList
+      $ foldr (uncurry $ IntMap.insertWith (\xs ys -> nub (xs ++ ys))) l
+      $ IntMap.assocs r
+
+-- | Edge in a directed graph.
 data Edge a = Edge { from   :: Node
                    , to     :: Node
                    , weight :: Double
                    , label  :: a
                    } deriving Show
 
-makeDGraph :: [Edge a] -> AList
-makeDGraph =
+-- | Create an adjacency list representation from a list of edges
+fromEdges :: [Edge a] -> AList
+fromEdges =
   AList
-    . foldr
-        (\Edge { from, to, weight } z ->
-          IntMap.insertWith (++) from [(weight, to)] z
-        )
-        IntMap.empty
+    . foldr (\Edge {..} z -> IntMap.insertWith (++) from [(weight, to)] z)
+            IntMap.empty
 
+fromEdgesSymmetric :: [Edge a] -> AList
+fromEdgesSymmetric es =
+  fromEdges es <> fromEdges [ e { from = to, to = from } | e@Edge {..} <- es ]
+
+-- | A path is a total distance and a non-empty list of nodes
 type Path = (Double, NonEmpty Node)
 
+endsAt :: Node -> Path -> Bool
+endsAt d (_, x :| _) = x == d
+
+-- | Simple, naive implementation of Dijkstra's algorithm.
+-- We don't check whether neighbors have been previously visited
+-- before adding to the queue (therefore we need to check the head
+-- element).
 dijkstraSimple
   :: DGraph g
   => g          -- ^ directed graph
   -> Heap Path  -- ^ initial pairs
   -> Set Node   -- ^ nodes visited so far
-  -> [Path]     -- ^ Dijkstra search tree
+  -> [Path]     -- ^ shortest path tree
 dijkstraSimple gr = go
  where
   go heap visited = case Heap.uncons heap of
@@ -75,7 +98,11 @@ dijkstraSimple gr = go
       else go hs visited
     Nothing -> []
 
--- | Iteration of Dijkstra's algorithm
+spDijkstraSimple :: DGraph g => g -> Node -> Node -> Maybe Path
+spDijkstraSimple gr o d =
+  find (endsAt d) $ dijkstraSimple gr (Heap.singleton (0, o :| [])) Set.empty
+
+-- | Single iteration of Dijkstra's algorithm.
 dijkstra :: DGraph g => g -> State (Heap Path, Set Node) (Maybe Path)
 dijkstra gr = get >>= \(heap, visited) -> case Heap.uncons heap of
 
@@ -89,7 +116,7 @@ dijkstra gr = get >>= \(heap, visited) -> case Heap.uncons heap of
         hs' =
             hs
               -- remove all instances of this node from the heap
-              & Heap.filter (\(_, x :| _) -> x /= xh)
+              & Heap.filter (endsAt xh)
               -- add paths to (unvisited) neighbors to the heap
               & flip (foldr Heap.insert) newPaths
 
@@ -103,7 +130,7 @@ generateDijkstra
   => g          -- ^ directed graph
   -> Heap Path  -- ^ initial pairs
   -> Set Node   -- ^ nodes visited so far
-  -> [Path]     -- ^ search tree
+  -> [Path]     -- ^ shortest path tree
 generateDijkstra = curry . evalState . unfoldM . dijkstra
 
 generateDijkstra'
@@ -119,22 +146,21 @@ generateDijkstra' gr =
 -- | Shortest path between a pair of nodes, using Dijkstra's algorithm
 spDijkstra
   :: DGraph g
-  => Node                    -- ^ origin node
+  => g                       -- ^ directed graph
+  -> Node                    -- ^ origin node
   -> Node                    -- ^ destination node
-  -> g                       -- ^ directed graph
   -> Maybe (Double, [Node])  -- ^ shortest path from origin to destination, if one exists
-spDijkstra o d gr =
-  fmap (second N.toList) $ find (\(_, (x :| _)) -> x == d) $ generateDijkstra
-    gr
-    (Heap.singleton (0, o :| []))
-    Set.empty
+spDijkstra gr o d = fmap (second N.toList) $ find (endsAt d) $ generateDijkstra
+  gr
+  (Heap.singleton (0, o :| []))
+  Set.empty
 
 -- | Shortest path between a pair of nodes, using the bidirectional Dijkstra algorithm
 spBDD
   :: DGraph g
-  => Node                    -- ^ origin node
+  => g                       -- ^ directed graph
+  -> Node                    -- ^ origin node
   -> Node                    -- ^ destination node
-  -> g                       -- ^ directed graph
   -> Maybe (Double, [Node])  -- ^ shortest path from origin to destination, if one exists
 spBDD = undefined
 
