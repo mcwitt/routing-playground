@@ -14,8 +14,8 @@ stack test
 
 ### Playground environment
 
-Under `osm/` is a Nix environment consisting of the following
-components:
+Under `osm/` is a [Nix](https://nixos.org/nix/) environment consisting
+of the following components:
 
 1. PostgreSQL/PostGIS database loaded with OpenStreetMap data for San
    Francisco
