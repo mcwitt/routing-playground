@@ -6,12 +6,8 @@ Experiments with routing algorithms using OpenStreetMap data.
 
 ### Nix
 
-1. Set up API token for [Interline OSM extracts](https://www.interline.io/osm/extracts/):
-    ``` shell
-    echo "\"$api_token\"" > osm-data/token.nix
-    ```
-2. Run `nix-shell` to enter the environment. Building the environment will likely take a long time on the first run.
-3. Inside the `nix-shell` environment, `$PGHOST` points to a running postgres server with data preloaded in the `pgsnapshot` database. For example, you should be able to run
+1. Run `nix-shell` to enter the environment. Building the environment will likely take a long time on the first run.
+2. Inside the `nix-shell` environment, `$PGHOST` points to a running postgres server with data preloaded in the `pgsnapshot` database. For example, you should be able to run
 
     ```
     $ psql -d pgsnapshot
