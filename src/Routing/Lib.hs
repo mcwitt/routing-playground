@@ -22,7 +22,6 @@ import qualified Data.Heap                     as Heap
 import           Data.IntMap                    ( IntMap )
 import qualified Data.IntMap                   as IntMap
 import           Data.List                      ( find
-                                                , nub
                                                 , unfoldr
                                                 )
 import qualified Data.List.NonEmpty            as N
@@ -46,12 +45,6 @@ newtype AList = AList { unAList :: IntMap [(Double, Node)] }
 instance DGraph AList where
   neighbors n = fromMaybe [] . IntMap.lookup n . unAList
 
-instance Semigroup AList where
-  AList l <> AList r =
-    AList
-      $ foldr (uncurry $ IntMap.insertWith (\xs ys -> nub (xs ++ ys))) l
-      $ IntMap.assocs r
-
 -- | Edge in a directed graph.
 data Edge a = Edge { from   :: Node
                    , to     :: Node
@@ -68,7 +61,7 @@ fromEdges =
 
 fromEdgesSymmetric :: [Edge a] -> AList
 fromEdgesSymmetric es =
-  fromEdges es <> fromEdges [ e { from = to, to = from } | e@Edge {..} <- es ]
+  fromEdges $ es >>= \e@Edge {..} -> [e, e { from = to, to = from }]
 
 -- | A path is a total distance and a non-empty list of nodes
 type Path = (Double, NonEmpty Node)
